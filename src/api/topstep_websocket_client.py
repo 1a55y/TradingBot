@@ -115,7 +115,7 @@ class TopStepXWebSocketClient:
     async def _listen_market_hub(self):
         """Listen for market data messages"""
         try:
-            while self.market_ws and not self.market_ws.closed:
+            while self.market_ws:
                 message = await self.market_ws.recv()
                 await self._process_message(message, "market")
                 
@@ -128,7 +128,7 @@ class TopStepXWebSocketClient:
     async def _listen_user_hub(self):
         """Listen for user data messages"""
         try:
-            while self.user_ws and not self.user_ws.closed:
+            while self.user_ws:
                 message = await self.user_ws.recv()
                 await self._process_message(message, "user")
                 
@@ -206,7 +206,11 @@ class TopStepXWebSocketClient:
         # Call callbacks
         for callback in self.callbacks['quote']:
             try:
-                await callback(contract_id, quote_data)
+                # Check if callback is async
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(contract_id, quote_data)
+                else:
+                    callback(contract_id, quote_data)
             except Exception as e:
                 logger.error(f"Quote callback error: {e}")
     
@@ -222,7 +226,11 @@ class TopStepXWebSocketClient:
         # Call callbacks
         for callback in self.callbacks['trade']:
             try:
-                await callback(contract_id, trades)
+                # Check if callback is async
+                if asyncio.iscoroutinefunction(callback):
+                    await callback(contract_id, trades)
+                else:
+                    callback(contract_id, trades)
             except Exception as e:
                 logger.error(f"Trade callback error: {e}")
     

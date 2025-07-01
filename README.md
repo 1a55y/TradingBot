@@ -6,13 +6,39 @@ A self-learning automated trading bot for Gold Futures (MGC) on TopStep evaluati
 
 This bot implements Smart Money Concepts (SMC) strategies to trade Micro Gold Futures (MGC) contracts. It starts with basic order block detection and progressively learns from its trading results to improve performance over time.
 
+## Real-Time Data Performance
+
+### WebSocket Implementation
+The bot uses raw WebSocket connections with SignalR protocol for real-time data streaming from TopStepX.
+
+### Data Update Rates
+Based on extensive testing with TopStepX WebSocket connections:
+
+**S&P 500 Contracts:**
+- **EP (E-mini S&P)**: 14.3 updates/second - EXCELLENT for scalping
+- **MES (Micro E-mini)**: 16.3 updates/second - EXCELLENT for scalping
+- Contract IDs: `CON.F.US.EP.U25`, `CON.F.US.MES.U25`
+
+**Gold Contracts:**
+- **GCE (Full-size Gold)**: 1.7 updates/second - Suitable for 1min+ timeframes
+- **MGC (Micro Gold)**: 2.5 updates/second - Suitable for 1min+ timeframes
+- Contract IDs: `CON.F.US.GCE.Q25`, `CON.F.US.MGC.Q25`
+
+### Trading Timeframe Recommendations
+- **Scalping (tick/sub-minute)**: Use S&P contracts (EP/MES) only
+- **1-minute to hourly**: Both S&P and Gold work excellently
+- **Swing/Position trading**: All contracts suitable
+
 ## Features
 
 - ✅ Phase 1: Basic order block detection
 - ✅ Mock trading mode for testing without API credentials
 - ✅ JSON-based status monitoring
 - ✅ Risk management with TopStep compliance
-- 🚧 Self-learning system (coming in Phase 2)
+- ✅ Phase 2: Real-time WebSocket data streaming
+- ✅ Position query and order placement via REST API
+- ✅ Production WebSocket client with auto-reconnect
+- 🚧 Self-learning system (in progress)
 - 🚧 Advanced SMC patterns (coming in Phase 3)
 
 ## Setup
@@ -70,17 +96,32 @@ watch -n 5 python check_status.py
 
 ```
 T-BOT/
-├── bot.py              # Main bot (production)
-├── bot_mock.py         # Mock bot for testing
-├── config.py           # Configuration settings
-├── check_status.py     # Status monitoring tool
-├── test_connection.py  # API connection tester
-├── requirements.txt    # Python dependencies
-├── .env               # API credentials (not in git)
-├── .gitignore         # Git ignore rules
-└── logs/              # Trading logs and status
-    ├── status.json    # Current bot status
-    └── trades_today.json  # Today's trades
+├── bot.py                      # Main bot (production)
+├── bot_mock.py                 # Mock bot for testing
+├── config.py                   # Configuration settings
+├── check_status.py             # Status monitoring tool
+├── test_connection.py          # API connection tester
+├── requirements.txt            # Python dependencies
+├── .env                       # API credentials (not in git)
+├── .gitignore                 # Git ignore rules
+├── src/                       # Source code modules
+│   ├── api/
+│   │   ├── topstep_client.py          # REST API client
+│   │   └── topstep_websocket_client.py # WebSocket client
+│   ├── core/
+│   │   ├── risk_manager.py            # Risk management
+│   │   └── signal_generator.py        # Trading signals
+│   ├── indicators/
+│   │   ├── atr.py                     # ATR calculation
+│   │   ├── order_blocks.py           # Order block detection
+│   │   └── support_resistance.py      # S/R levels
+│   ├── utils/
+│   │   ├── logger_setup.py           # Logging configuration
+│   │   └── time_utils.py             # Time utilities
+│   └── config.py                      # Centralized config
+└── logs/                      # Trading logs and status
+    ├── status.json            # Current bot status
+    └── trades_today.json      # Today's trades
 ```
 
 ## Trading Configuration
@@ -106,17 +147,22 @@ T-BOT/
 
 ## Development Phases
 
-### ✅ Phase 1: Foundation (Current)
+### ✅ Phase 1: Foundation (Complete)
 - Basic API connection
 - Order block detection
 - Risk management
 - JSON monitoring
 
-### 🚧 Phase 2: Core Features (Next)
+### ✅ Phase 2: Core Features (Complete)
 - Split code into modules
+- Real-time WebSocket data streaming
+- Production-ready API client
+- Position query and order placement
+
+### 🚧 Phase 2.5: In Progress
 - Self-learning system
-- Position sizing optimization
 - Pattern performance tracking
+- DXY correlation for trade filtering
 
 ### 📅 Phase 3: Advanced Features
 - Breaker blocks
@@ -187,6 +233,19 @@ python check_status.py
 3. **Risk Management**: Never disable risk limits
 4. **API Limits**: Be aware of rate limits on TopStepX API
 5. **Time Zones**: Bot uses Helsinki time (EET/EEST)
+
+## API Implementation Notes
+
+### Critical Fixes Applied
+1. **Position Query**: Changed from `"accountIds": [id]` to `"accountId": id` (singular)
+2. **WebSocket**: Implemented raw WebSocket with SignalR protocol (0x1e delimiter)
+3. **Empty Handshake**: TopStepX returns empty `{}` handshake response - this is normal
+4. **Contract IDs**: Use correct IDs (e.g., `CON.F.US.EP.U25` not `CON.F.US.ES.U25` for S&P)
+
+### REST API Settings
+- **Practice Account**: Uses `live: false` (returns 15-min delayed data)
+- **Live/Evaluation Accounts**: Uses `live: true` for real-time data
+- **WebSocket**: Required for real-time data streaming regardless of account type
 
 ## Troubleshooting
 
