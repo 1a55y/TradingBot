@@ -6,8 +6,10 @@ from typing import Dict, List, Optional
 from src.core.base_bot import BaseGoldBot
 from src.api.topstep_client import TopStepXClient
 from src.api.mock_topstep_client import MockTopStepXClient
+from src.api.topstep_websocket_client import TopStepXWebSocketClient
 from src.utils.logger_setup import logger
 from src.utils.data_validator import DataValidationError
+from src.utils.candle_builder import CandleBuilder
 
 
 class LiveGoldBot(BaseGoldBot):
@@ -27,49 +29,74 @@ class LiveGoldBot(BaseGoldBot):
         self.last_candle_update = None
         self.candle_cache = {}
         
-        # Tasks for concurrent operations
-        self.market_data_task = None
-        self.trading_events_task = None
+        # WebSocket client for real-time data
+        self.ws_client = None
+        self.mgc_contract_id = None
         
-        logger.info("Live Gold Bot initialized")
+        # Candle builder for real-time data
+        self.candle_builder = CandleBuilder(timeframe_minutes=15)  # 15-minute candles
+        self.last_rest_candle_fetch = None
+        self.using_realtime_candles = False
+        
+        logger.info("Live Gold Bot initialized with WebSocket support")
         logger.info(f"Trading Symbol: {self.config.SYMBOL}")
         logger.info(f"Market: {self.config.TOPSTEP_MARKET}")
     
     async def connect(self) -> bool:
-        """Connect to TopStepX API"""
+        """Connect to TopStepX API and WebSocket"""
         try:
-            if await self.api_client.connect():
-                self.is_running = True
-                
-                # Start background tasks
-                self.market_data_task = asyncio.create_task(self._process_market_data())
-                self.trading_events_task = asyncio.create_task(self._process_trading_events())
-                
-                # Get initial account info
-                account_info = await self.api_client.get_account_info()
-                if account_info:
-                    logger.info(f"Connected to account: {account_info.get('username')}")
-                    logger.info(f"Account balance: ${account_info.get('balance', 0):.2f}")
-                
-                return True
-            else:
+            # Connect to REST API first
+            if not await self.api_client.connect():
                 logger.error("Failed to connect to TopStepX API")
                 return False
+            
+            self.is_running = True
+            
+            # Get MGC contract ID
+            contract = await self.api_client._get_contract_by_symbol("MGC")
+            if contract:
+                self.mgc_contract_id = contract.get("id")
+                logger.info(f"Found MGC contract: {self.mgc_contract_id}")
+            else:
+                logger.error("Could not find MGC contract")
+            
+            # Get initial account info
+            account_info = await self.api_client.get_account_info()
+            if account_info:
+                logger.info(f"Connected to account: {account_info.get('username')}")
+                logger.info(f"Account balance: ${account_info.get('balance', 0):.2f}")
+            
+            # Connect WebSocket for real-time data
+            if self.mgc_contract_id and not isinstance(self.api_client, MockTopStepXClient):
+                logger.info("Connecting to WebSocket for real-time data...")
+                self.ws_client = TopStepXWebSocketClient(self.api_client.session_token)
+                
+                # Register callbacks
+                self.ws_client.on_quote(self._handle_quote_update)
+                self.ws_client.on_trade(self._handle_trade_update)
+                
+                if await self.ws_client.connect():
+                    # Subscribe to MGC quotes
+                    await self.ws_client.subscribe_quotes(self.mgc_contract_id)
+                    await self.ws_client.subscribe_trades(self.mgc_contract_id)
+                    logger.info("✅ WebSocket connected - receiving real-time data!")
+                else:
+                    logger.warning("WebSocket connection failed, falling back to REST API")
+            
+            return True
                 
         except Exception as e:
             logger.error(f"Connection error: {e}")
             return False
     
     async def disconnect(self) -> None:
-        """Disconnect from TopStepX API"""
+        """Disconnect from TopStepX API and WebSocket"""
         try:
             self.is_running = False
             
-            # Cancel background tasks
-            if self.market_data_task:
-                self.market_data_task.cancel()
-            if self.trading_events_task:
-                self.trading_events_task.cancel()
+            # Disconnect WebSocket
+            if self.ws_client:
+                await self.ws_client.disconnect()
             
             # Disconnect API client
             await self.api_client.disconnect()
@@ -79,54 +106,56 @@ class LiveGoldBot(BaseGoldBot):
         except Exception as e:
             logger.error(f"Disconnect error: {e}")
     
-    async def _process_market_data(self) -> None:
-        """Process incoming market data stream"""
+    def _handle_quote_update(self, contract_id: str, quote_data: dict):
+        """Handle real-time quote updates from WebSocket"""
         try:
-            async for data in self.api_client.handle_market_data_stream():
-                if not self.is_running:
-                    break
+            # Update current price
+            bid = quote_data.get('bestBid', 0)
+            ask = quote_data.get('bestAsk', 0)
+            
+            if bid > 0 and ask > 0:
+                self.current_price = (bid + ask) / 2
                 
-                # Update current price
-                if 'bid' in data and 'ask' in data:
-                    self.current_price = (data['bid'] + data['ask']) / 2
-                    self.market_data_buffer.append({
-                        'timestamp': datetime.now(timezone.utc),
-                        'price': self.current_price,
-                        'bid': data['bid'],
-                        'ask': data['ask'],
-                        'bid_size': data.get('bid_size', 0),
-                        'ask_size': data.get('ask_size', 0)
-                    })
+                # Build real-time candles
+                self.candle_builder.add_tick(self.current_price, volume=1)
+                self.using_realtime_candles = True
+                
+                # Store tick data
+                self.market_data_buffer.append({
+                    'timestamp': datetime.now(timezone.utc),
+                    'price': self.current_price,
+                    'bid': bid,
+                    'ask': ask,
+                    'bid_size': quote_data.get('bestBidSize', 0),
+                    'ask_size': quote_data.get('bestAskSize', 0)
+                })
+                
+                # Keep buffer size manageable
+                if len(self.market_data_buffer) > 1000:
+                    self.market_data_buffer = self.market_data_buffer[-1000:]
                     
-                    # Keep buffer size manageable
-                    if len(self.market_data_buffer) > 1000:
-                        self.market_data_buffer = self.market_data_buffer[-1000:]
-                        
-        except asyncio.CancelledError:
-            logger.info("Market data task cancelled")
+                # Log every 100th update
+                if len(self.market_data_buffer) % 100 == 0:
+                    candles_count = len(self.candle_builder.completed_candles)
+                    logger.info(f"📊 Real-time: Price=${self.current_price:.2f} | Candles built: {candles_count} | Updates: {len(self.market_data_buffer)}")
+                    
         except Exception as e:
-            logger.error(f"Error processing market data: {e}")
+            logger.error(f"Error handling quote update: {e}")
     
-    async def _process_trading_events(self) -> None:
-        """Process trading events (fills, rejects, etc.)"""
+    def _handle_trade_update(self, contract_id: str, trades: list):
+        """Handle real-time trade updates from WebSocket"""
         try:
-            async for event in self.api_client.handle_trading_events():
-                if not self.is_running:
-                    break
+            for trade in trades:
+                price = trade.get('price', 0)
+                volume = trade.get('volume', 0)
+                trade_type = "BUY" if trade.get('type') == 0 else "SELL"
                 
-                event_type = event.get('type')
-                
-                if event_type == 'fill':
-                    await self._handle_fill(event)
-                elif event_type == 'reject':
-                    await self._handle_reject(event)
-                elif event_type == 'position_update':
-                    await self._handle_position_update(event)
+                # Log significant trades
+                if volume > 10:  # Log larger trades
+                    logger.debug(f"Trade: {trade_type} {volume} @ ${price:.2f}")
                     
-        except asyncio.CancelledError:
-            logger.info("Trading events task cancelled")
         except Exception as e:
-            logger.error(f"Error processing trading events: {e}")
+            logger.error(f"Error handling trade update: {e}")
     
     async def _handle_fill(self, event: Dict) -> None:
         """Handle order fill event"""
@@ -167,16 +196,22 @@ class LiveGoldBot(BaseGoldBot):
             await self.flatten_all_positions()
     
     async def get_candles(self, symbol: str, timeframe: str, limit: int = 100) -> pd.DataFrame:
-        """Get historical candles from API"""
+        """Get candles - use real-time data when available, otherwise REST API"""
         try:
-            # Check cache first
-            cache_key = f"{symbol}_{timeframe}_{limit}"
-            now = datetime.now(timezone.utc)
+            # If we have real-time candles, use them
+            if self.using_realtime_candles and len(self.candle_builder.completed_candles) >= 20:
+                logger.info("📊 Using REAL-TIME candles from WebSocket data!")
+                df = self.candle_builder.get_latest_candles(limit, include_current=True)
+                
+                if not df.empty:
+                    # Reset index to have timestamp as column
+                    df = df.reset_index()
+                    return df
+                else:
+                    logger.warning("Real-time candles empty, falling back to REST API")
             
-            if cache_key in self.candle_cache:
-                cached_data, cache_time = self.candle_cache[cache_key]
-                if (now - cache_time).seconds < 60:  # 1 minute cache
-                    return cached_data
+            # Fallback to REST API
+            logger.debug("Using REST API candles")
             
             # Fetch from API
             candles_data = await self.api_client.get_historical_data(
@@ -209,6 +244,18 @@ class LiveGoldBot(BaseGoldBot):
             # Validate data
             df = self.validator.validate_candles_df(df)
             
+            # If we just started and have no real-time data yet, seed the candle builder
+            if not self.using_realtime_candles and not df.empty and self.ws_client:
+                logger.info("🌱 Seeding candle builder with historical data...")
+                for _, row in df.tail(50).iterrows():  # Use last 50 candles
+                    # Add a tick at close price for each historical candle
+                    self.candle_builder.add_tick(
+                        price=row['close'],
+                        volume=row['volume'],
+                        timestamp=row['timestamp']
+                    )
+                logger.info(f"Seeded {len(self.candle_builder.completed_candles)} historical candles")
+            
             # Cache the result
             self.candle_cache[cache_key] = (df, now)
             
@@ -224,13 +271,17 @@ class LiveGoldBot(BaseGoldBot):
     async def place_order(self, side: str, quantity: int, stop_price: float, target_price: float) -> bool:
         """Place order via API"""
         try:
-            # Get current market price
-            market_data = await self.api_client.get_market_data(self.config.SYMBOL)
-            if not market_data:
-                logger.error("Cannot get current market price")
-                return False
-            
-            current_price = (market_data['bid'] + market_data['ask']) / 2
+            # Use real-time price if available, otherwise get from API
+            if self.current_price > 0:
+                current_price = self.current_price
+                logger.info(f"Using real-time WebSocket price: ${current_price:.2f}")
+            else:
+                # Fallback to REST API
+                market_data = await self.api_client.get_market_data(self.config.SYMBOL)
+                if not market_data:
+                    logger.error("Cannot get current market price")
+                    return False
+                current_price = (market_data['bid'] + market_data['ask']) / 2
             
             # Prepare order data
             order_data = {
