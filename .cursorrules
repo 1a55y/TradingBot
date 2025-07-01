@@ -1,0 +1,220 @@
+# T-BOT Gold Futures Trading Bot - Development Rules
+
+## Project Overview
+Building an autonomous Gold Futures (MGC) trading bot with self-learning capabilities for TopStep evaluation. The bot improves automatically through simple performance tracking, no complex ML required.
+
+## Core Philosophy
+**Start Small. Prove It Works. Scale Gradually.**
+- Begin with 3 files, grow organically to ~10 files
+- Add complexity only when current features are profitable
+- This is a living project - plans and structure WILL evolve
+
+## File Structure Evolution
+
+### Phase 1: Foundation (Weeks 1-2) - 3 Files
+```
+├── bot.py          # Everything initially
+├── config.py       # Basic settings  
+└── .env           # API credentials
+```
+
+### Phase 2: Core Features (Weeks 3-4) - 5 Files
+```
+├── bot.py          # Main logic
+├── broker.py       # API wrapper (split when needed)
+├── patterns.py     # Order blocks only
+├── config.py       # Settings
+└── logs/          # Basic logging
+```
+
+### Phase 3: Risk & Monitoring (Weeks 5-6) - 7-8 Files
+```
+Add:
+├── risk_manager.py    # Position sizing
+├── monitoring.py      # JSON status
+└── data_feed.py      # Market data (split from broker)
+```
+
+### Phase 4: Full System (Weeks 7-8) - ~10 Files
+```
+Add:
+├── advanced_patterns.py  # Breaker blocks (if profitable)
+├── learning_system.py    # Self-improvement tracking
+└── requirements.txt      # Dependencies
+```
+
+## Critical Implementation Rules
+
+### 1. Progressive Development
+- Start with EVERYTHING in bot.py
+- Split files only when they exceed 300 lines OR functionality becomes unclear
+- WebSocket handler only if broker.py gets too complex
+- Utils.py is a code smell - avoid until absolutely necessary
+
+### 2. Pattern Implementation Priority
+- Week 1-4: Order blocks ONLY
+- Week 5-6: Add breaker blocks ONLY if order blocks profitable (>45% win rate)
+- Week 7-8: Add inducement/liquidity sweeps if basics working
+- NEVER add all patterns at once
+
+### 3. Self-Learning System Rules
+- Track EVERY trade outcome with pattern, conditions, and P&L
+- Disable patterns automatically if <40% win rate after 20 trades
+- Position sizing: Start 5 MGC, increase with wins, decrease with losses
+- No complex ML - just track "when I did X, I made/lost $Y"
+
+### 4. Risk Management (Non-Negotiable)
+```python
+# Hard limits - NEVER override these
+DAILY_LOSS_LIMIT = 800      # TopStep rule
+MAX_RISK_PER_TRADE = 500    # Absolute max
+MAX_CONSECUTIVE_LOSSES = 2   # Stop trading
+MIN_PATTERN_SCORE = 7       # Only high-quality trades
+```
+
+### 5. Monitoring Approach
+- PRIMARY: JSON files (status.json, trades_today.json)
+- Atomic writes to prevent corruption
+- Status updates every 30 seconds
+- NO complex dashboards until JSON monitoring works perfectly
+- Terminal dashboard with 'rich' is future enhancement
+
+### 6. Testing Requirements
+- Week 1: Can connect and place orders?
+- Week 4: 20+ paper trades executed
+- Week 8: 100+ paper trades with positive expectancy
+- NEVER go live without 100+ profitable paper trades
+
+## Code Style Guidelines
+
+### General Rules
+- NO COMMENTS unless explicitly needed for complex logic
+- Clear variable names over comments
+- Async/await for all I/O operations
+- Type hints for function signatures
+- NO premature optimization
+
+### Error Handling
+```python
+# Always wrap critical operations
+try:
+    await broker.place_order(...)
+except Exception as e:
+    logger.error(f"Order failed: {e}")
+    # Continue running - never crash
+```
+
+### Logging Standards
+- INFO: Trade executions, pattern detections
+- WARNING: Risk limits approached, connection issues
+- ERROR: Failed operations (but keep running)
+- CRITICAL: Emergency shutdown only
+
+## Configuration Management
+
+### Environment Variables (.env)
+```
+TOPSTEP_API_KEY=xxx
+TOPSTEP_API_SECRET=xxx
+PAPER_TRADING=true  # Always start with paper
+```
+
+### Trading Parameters (config.py)
+- All magic numbers in Config class
+- Trading hours in Helsinki time
+- Progressive stages: BASIC → ENHANCED → ADVANCED
+
+## Performance Evolution Expectations
+
+### Month 1: Learning Phase
+- 5-8 MGC positions
+- Order blocks only
+- 40-45% win rate expected
+- Goal: Don't lose money
+
+### Month 2: Optimization
+- 10-12 MGC (bot-adjusted)
+- Add breaker blocks if profitable
+- 45-50% win rate
+- Goal: Small consistent profits
+
+### Month 3: Scaling
+- 12-16 MGC (confidence-based)
+- Only proven patterns active
+- 50-55% win rate
+- Goal: Pass TopStep evaluation
+
+## Emergency Procedures
+
+### File-Based Controls
+- Create `EMERGENCY_STOP.txt` → Flatten all positions and exit
+- Create `PAUSE_TRADING.txt` → Stop new trades, keep positions
+- Create `FLATTEN_ALL.txt` → Close all positions, keep running
+- Write number to `ADJUST_RISK.txt` → Change position size
+
+### Position Sync
+- Reconcile broker positions every 60 seconds
+- If mismatch detected, trust broker state
+- Log all discrepancies for debugging
+
+## Documentation Requirements
+
+### Active Plans
+- Main Plan: `Plans/MainPlan/Overall_Plan/Plan.md`
+- SMC Strategy: `Plans/MainPlan/SMC_Strategy_Plan/SMC_Strategy.md`
+- These are LIVING DOCUMENTS - update as project evolves
+
+### Required Files
+- CLAUDE.md: Project memory and decisions
+- README.md: Project overview and setup
+- requirements.txt: All dependencies with versions
+
+## Common Pitfalls to Avoid
+
+1. **Over-engineering early**: Start simple, enhance later
+2. **Adding patterns too fast**: One pattern at a time
+3. **Ignoring paper results**: 100+ trades minimum
+4. **Fixed position sizing**: Let bot adjust based on performance
+5. **Complex monitoring**: JSON files are sufficient
+
+## Success Metrics
+
+### Week 4 Checkpoint
+- [ ] 20+ trades executed without crashes
+- [ ] Basic order blocks detected accurately
+- [ ] Risk rules never violated
+- [ ] JSON monitoring working
+
+### Week 8 Checkpoint  
+- [ ] 100+ trades completed
+- [ ] 48%+ win rate achieved
+- [ ] Positive expectancy proven
+- [ ] Self-learning showing results
+
+### Ready for Live
+- [ ] 200+ profitable paper trades
+- [ ] Bot survived all market conditions
+- [ ] Emergency procedures tested
+- [ ] Consistent profitability for 2+ weeks
+
+## Remember
+- The goal is a WORKING bot that makes money, not perfect code
+- If basic order blocks aren't profitable, adding more patterns won't help
+- Let the bot learn and adapt - trust the process
+- Paper trade longer than you think necessary
+- This plan WILL change as you build - that's not failure, that's learning
+
+## Key Commands
+```bash
+# Check bot status
+cat logs/status.json | jq .
+
+# Monitor trades
+watch -n 5 'cat logs/trades_today.json | jq .summary'
+
+# Emergency stop
+echo "STOP" > EMERGENCY_STOP.txt
+
+# View learning progress
+cat logs/bot_learning.json | jq .pattern_stats
+```
