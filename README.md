@@ -29,6 +29,11 @@ Based on extensive testing with TopStepX WebSocket connections:
 - **1-minute to hourly**: Both S&P and Gold work excellently
 - **Swing/Position trading**: All contracts suitable
 
+### Data Architecture
+- **REST API**: Official exchange candles for pattern detection
+- **WebSocket**: Real-time price monitoring for execution timing
+- **Hybrid Approach**: Accurate patterns + fast execution
+
 ## Features
 
 - ✅ Phase 1: Basic order block detection

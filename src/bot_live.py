@@ -9,7 +9,6 @@ from src.api.mock_topstep_client import MockTopStepXClient
 from src.api.topstep_websocket_client import TopStepXWebSocketClient
 from src.utils.logger_setup import logger
 from src.utils.data_validator import DataValidationError
-from src.utils.candle_builder import CandleBuilder
 
 
 class LiveGoldBot(BaseGoldBot):
@@ -33,10 +32,9 @@ class LiveGoldBot(BaseGoldBot):
         self.ws_client = None
         self.mgc_contract_id = None
         
-        # Candle builder for real-time data
-        self.candle_builder = CandleBuilder(timeframe_minutes=15)  # 15-minute candles
-        self.last_rest_candle_fetch = None
-        self.using_realtime_candles = False
+        # Real-time price monitoring
+        self.last_tick_time = None
+        self.tick_count = 0
         
         logger.info("Live Gold Bot initialized with WebSocket support")
         logger.info(f"Trading Symbol: {self.config.SYMBOL}")
@@ -115,14 +113,12 @@ class LiveGoldBot(BaseGoldBot):
             
             if bid > 0 and ask > 0:
                 self.current_price = (bid + ask) / 2
+                self.last_tick_time = datetime.now(timezone.utc)
+                self.tick_count += 1
                 
-                # Build real-time candles
-                self.candle_builder.add_tick(self.current_price, volume=1)
-                self.using_realtime_candles = True
-                
-                # Store tick data
+                # Store tick data for analysis
                 self.market_data_buffer.append({
-                    'timestamp': datetime.now(timezone.utc),
+                    'timestamp': self.last_tick_time,
                     'price': self.current_price,
                     'bid': bid,
                     'ask': ask,
@@ -134,10 +130,9 @@ class LiveGoldBot(BaseGoldBot):
                 if len(self.market_data_buffer) > 1000:
                     self.market_data_buffer = self.market_data_buffer[-1000:]
                     
-                # Log every 100th update
-                if len(self.market_data_buffer) % 100 == 0:
-                    candles_count = len(self.candle_builder.completed_candles)
-                    logger.info(f"📊 Real-time: Price=${self.current_price:.2f} | Candles built: {candles_count} | Updates: {len(self.market_data_buffer)}")
+                # Log every 100th tick
+                if self.tick_count % 100 == 0:
+                    logger.info(f"📊 Real-time Price: ${self.current_price:.2f} | Bid: ${bid:.2f} | Ask: ${ask:.2f} | Ticks: {self.tick_count}")
                     
         except Exception as e:
             logger.error(f"Error handling quote update: {e}")
@@ -196,22 +191,19 @@ class LiveGoldBot(BaseGoldBot):
             await self.flatten_all_positions()
     
     async def get_candles(self, symbol: str, timeframe: str, limit: int = 100) -> pd.DataFrame:
-        """Get candles - use real-time data when available, otherwise REST API"""
+        """Get official exchange candles from REST API for pattern detection"""
         try:
-            # If we have real-time candles, use them
-            if self.using_realtime_candles and len(self.candle_builder.completed_candles) >= 20:
-                logger.info("📊 Using REAL-TIME candles from WebSocket data!")
-                df = self.candle_builder.get_latest_candles(limit, include_current=True)
-                
-                if not df.empty:
-                    # Reset index to have timestamp as column
-                    df = df.reset_index()
-                    return df
-                else:
-                    logger.warning("Real-time candles empty, falling back to REST API")
+            # Always use REST API for accurate exchange candles
+            # WebSocket is only for real-time price monitoring, not candle building
             
-            # Fallback to REST API
-            logger.debug("Using REST API candles")
+            # Check cache first
+            cache_key = f"{symbol}_{timeframe}_{limit}"
+            now = datetime.now(timezone.utc)
+            
+            if cache_key in self.candle_cache:
+                cached_data, cache_time = self.candle_cache[cache_key]
+                if (now - cache_time).seconds < 60:  # 1 minute cache
+                    return cached_data
             
             # Fetch from API
             candles_data = await self.api_client.get_historical_data(
@@ -243,18 +235,6 @@ class LiveGoldBot(BaseGoldBot):
             
             # Validate data
             df = self.validator.validate_candles_df(df)
-            
-            # If we just started and have no real-time data yet, seed the candle builder
-            if not self.using_realtime_candles and not df.empty and self.ws_client:
-                logger.info("🌱 Seeding candle builder with historical data...")
-                for _, row in df.tail(50).iterrows():  # Use last 50 candles
-                    # Add a tick at close price for each historical candle
-                    self.candle_builder.add_tick(
-                        price=row['close'],
-                        volume=row['volume'],
-                        timestamp=row['timestamp']
-                    )
-                logger.info(f"Seeded {len(self.candle_builder.completed_candles)} historical candles")
             
             # Cache the result
             self.candle_cache[cache_key] = (df, now)

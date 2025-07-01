@@ -84,9 +84,9 @@ class Config:
     MAX_CONSECUTIVE_LOSSES = 2
     
     # Trading Hours (Helsinki Time - EET/EEST)
-    SESSION_START = time(16, 45)  # 4:45 PM
-    SESSION_END = time(22, 30)    # 10:30 PM
-    NEWS_BLACKOUT_START = time(22, 15)  # No new trades
+    SESSION_START = time(2, 0)     # 2:00 AM
+    SESSION_END = time(23, 0)      # 11:00 PM
+    NEWS_BLACKOUT_START = time(22, 45)  # No new trades
     
     # Pattern Detection Settings
     MIN_PATTERN_SCORE = 7  # Only high-quality trades
