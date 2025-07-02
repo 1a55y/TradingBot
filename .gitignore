@@ -12,6 +12,7 @@ ENV/
 # Python
 __pycache__/
 *.py[cod]
+*.pyc
 *$py.class
 *.so
 .Python
@@ -33,6 +34,7 @@ wheels/
 
 # Logs
 logs/
+logs/*.json
 *.log
 status.json
 trades_today.json
@@ -50,8 +52,6 @@ bot_learning.json
 .coverage
 .pytest_cache/
 htmlcov/
-test_*.py
-check_*.py
 
 # Jupyter
 .ipynb_checkpoints/

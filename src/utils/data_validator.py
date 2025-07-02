@@ -1,8 +1,13 @@
 """Data validation for trading bot - CRITICAL FIX #1"""
-import pandas as pd
-import numpy as np
-from typing import Dict, List, Optional, Union
+# Standard library imports
 from datetime import datetime
+from typing import Dict, List, Optional, Union
+
+# Third-party imports
+import numpy as np
+import pandas as pd
+
+# Local imports
 from .logger_setup import logger
 
 class DataValidationError(Exception):
@@ -14,10 +19,18 @@ class DataValidator:
     
     def __init__(self, config):
         self.config = config
-        # Reasonable price ranges for gold
-        # Accept wider range since TopStepX returns prices in different formats
-        self.MIN_GOLD_PRICE = 100.0    # Minimum reasonable gold price
-        self.MAX_GOLD_PRICE = 10000.0  # Maximum reasonable gold price
+        # Price ranges for different contracts
+        self.price_ranges = {
+            'MGC': (100.0, 10000.0),    # Micro Gold
+            'GC': (100.0, 10000.0),     # Gold
+            'MNQ': (10000.0, 50000.0),  # Micro E-mini Nasdaq
+            'NQ': (10000.0, 50000.0),   # E-mini Nasdaq
+            'MES': (3000.0, 10000.0),   # Micro E-mini S&P
+            'ES': (3000.0, 10000.0)     # E-mini S&P
+        }
+        # Get current contract from config
+        self.current_contract = getattr(config, 'SYMBOL', 'MGC')
+        self.MIN_PRICE, self.MAX_PRICE = self.price_ranges.get(self.current_contract, (100.0, 100000.0))
         self.MAX_PRICE_CHANGE_PCT = 0.05  # 5% max change per candle
         
     def validate_price(self, price: float, field_name: str = "price") -> float:
@@ -34,11 +47,11 @@ class DataValidator:
         if price <= 0:
             raise DataValidationError(f"{field_name} must be positive, got {price}")
         
-        # Check reasonable range for gold
-        if price < self.MIN_GOLD_PRICE or price > self.MAX_GOLD_PRICE:
+        # Check reasonable range based on contract
+        if price < self.MIN_PRICE or price > self.MAX_PRICE:
             raise DataValidationError(
                 f"{field_name} {price} outside reasonable range "
-                f"[{self.MIN_GOLD_PRICE}, {self.MAX_GOLD_PRICE}]"
+                f"[{self.MIN_PRICE}, {self.MAX_PRICE}]"
             )
         
         return float(price)
@@ -105,7 +118,7 @@ class DataValidator:
             if min_price <= 0:
                 raise DataValidationError(f"Negative/zero price in {col}: {min_price}")
             
-            if min_price < self.MIN_GOLD_PRICE or max_price > self.MAX_GOLD_PRICE:
+            if min_price < self.MIN_PRICE or max_price > self.MAX_PRICE:
                 raise DataValidationError(
                     f"{col} prices outside reasonable range: [{min_price}, {max_price}]"
                 )
@@ -166,10 +179,14 @@ class DataValidator:
         if not isinstance(quantity, int) or quantity <= 0:
             raise DataValidationError(f"Invalid quantity: {quantity}")
         
-        if quantity < self.config.MIN_POSITION_MGC or quantity > self.config.MAX_POSITION_MGC:
+        # Use generic MIN/MAX_POSITION from config which adapts to current contract
+        min_pos = getattr(self.config, 'MIN_POSITION', self.config.MIN_POSITION_MNQ)
+        max_pos = getattr(self.config, 'MAX_POSITION', self.config.MAX_POSITION_MNQ)
+        
+        if quantity < min_pos or quantity > max_pos:
             raise DataValidationError(
                 f"Quantity {quantity} outside allowed range "
-                f"[{self.config.MIN_POSITION_MGC}, {self.config.MAX_POSITION_MGC}]"
+                f"[{min_pos}, {max_pos}]"
             )
         
         # Validate prices

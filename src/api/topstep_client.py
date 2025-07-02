@@ -1,14 +1,16 @@
 """TopStepX API Client Implementation"""
-import aiohttp
+# Standard library imports
 import asyncio
 import json
-import hmac
-import hashlib
-import base64
 from datetime import datetime, timezone
-from typing import Dict, Optional, List, Any
-from src.utils.logger_setup import logger
+from typing import Any, Dict, List, Optional
+
+# Third-party imports
+import aiohttp
+
+# Local imports
 from src.config import Config
+from src.utils.logger_setup import logger
 
 
 class TopStepXClient:
@@ -121,6 +123,7 @@ class TopStepXClient:
                     result = await response.json()
                     if result.get('success') and result.get('token'):
                         self.session_token = result['token']
+                        self._last_auth_time = datetime.now()  # Track auth time
                         logger.info(f"Login successful, session token obtained")
                         return True
                     else:
@@ -214,6 +217,12 @@ class TopStepXClient:
         """Validate current session token"""
         if not self.session_token:
             return False
+        
+        # Skip validation if we recently authenticated (within 5 minutes)
+        if hasattr(self, '_last_auth_time'):
+            time_since_auth = (datetime.now() - self._last_auth_time).seconds
+            if time_since_auth < 300:  # 5 minutes
+                return True
             
         try:
             async with self.session.post(
@@ -222,7 +231,10 @@ class TopStepXClient:
             ) as response:
                 if response.status == 200:
                     result = await response.json()
-                    return result.get('isValid', False)
+                    # TopStep API might return accounts instead of isValid
+                    if 'accounts' in result:
+                        return len(result.get('accounts', [])) > 0
+                    return result.get('isValid', True)  # Default to True if field missing
                 else:
                     return False
         except Exception as e:
@@ -242,7 +254,18 @@ class TopStepXClient:
                 headers=self._get_auth_headers()
             ) as response:
                 if response.status == 200:
-                    return await response.json()
+                    result = await response.json()
+                    # Debug log
+                    if result and len(result) > 0:
+                        logger.debug(f"Found {len(result)} positions")
+                    # Make sure we return a list
+                    if isinstance(result, list):
+                        return result
+                    elif isinstance(result, dict):
+                        # If it's wrapped in an object, extract the positions
+                        return result.get('positions', [])
+                    else:
+                        return []
                 else:
                     logger.error(f"Failed to get positions: {response.status}")
                     return []
@@ -267,8 +290,10 @@ class TopStepXClient:
             }
             
             # TopStepX order format
+            # Use account_id from order_data if provided, otherwise use self.account_id
+            account_id = order_data.get("account_id", self.account_id)
             topstep_order = {
-                "accountId": int(self.account_id),
+                "accountId": int(account_id),
                 "contractId": order_data.get("contractId"),
                 "type": order_type_map.get(order_data.get("orderType", "Market"), 2),
                 "side": order_side_map.get(order_data.get("side", "Buy"), 0),

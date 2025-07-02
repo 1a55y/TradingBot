@@ -1,4 +1,6 @@
 """Main entry point for Gold Trading Bot"""
+# Standard library imports
+import argparse
 import asyncio
 import sys
 from pathlib import Path
@@ -6,15 +8,14 @@ from pathlib import Path
 # Add src to Python path
 sys.path.insert(0, str(Path(__file__).parent / "src"))
 
-from src.bot import GoldBot
-from src.bot_mock import MockGoldBot
+# Local imports
 from src.bot_live import LiveGoldBot
+# Removed obsolete bot_mock import - using LiveGoldBot with mock mode instead
 from src.config import Config
 from src.utils.logger_setup import logger
 
 def main():
     """Main entry point"""
-    import argparse
     
     parser = argparse.ArgumentParser(description="Gold Futures Trading Bot")
     parser.add_argument("--mock", action="store_true", help="Run in mock mode")
@@ -25,7 +26,7 @@ def main():
     
     if args.mock:
         logger.info("Starting in MOCK mode...")
-        bot = MockGoldBot()
+        bot = LiveGoldBot(use_mock_api=True)
     elif args.live_mock:
         logger.info("Starting LIVE bot with MOCK API...")
         logger.info(f"Paper Trading: {Config.PAPER_TRADING}")
@@ -37,7 +38,7 @@ def main():
     else:
         # Default to mock mode for safety
         logger.info("Starting in MOCK mode (default)...")
-        bot = MockGoldBot()
+        bot = LiveGoldBot(use_mock_api=True)
     
     if args.test:
         # Test mode - run for 30 seconds

@@ -3,15 +3,20 @@ TopStepX WebSocket Client - Production Implementation
 Based on successful raw WebSocket approach that bypasses signalrcore issues
 """
 
+# Standard library imports
 import asyncio
-import websockets
 import json
-from typing import Dict, Optional, Callable, List, Any
-from datetime import datetime, timezone
-from collections import defaultdict
 import logging
-from src.utils.logger_setup import logger
+from collections import defaultdict
+from datetime import datetime, timezone
+from typing import Any, Callable, Dict, List, Optional
+
+# Third-party imports
+import websockets
+
+# Local imports
 from src.config import Config
+from src.utils.logger_setup import logger
 
 
 class TopStepXWebSocketClient:

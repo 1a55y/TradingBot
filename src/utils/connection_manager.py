@@ -1,9 +1,14 @@
 """WebSocket connection management with automatic reconnection - CRITICAL FIX #4"""
+# Standard library imports
 import asyncio
-import websockets
 import json
-from typing import Optional, Callable, Dict, Any
 from datetime import datetime, timedelta
+from typing import Any, Callable, Dict, Optional
+
+# Third-party imports
+import websockets
+
+# Local imports
 from .logger_setup import logger
 
 class ConnectionError(Exception):

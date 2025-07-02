@@ -1,13 +1,16 @@
 """Atomic file operations to prevent corruption - CRITICAL FIX #2"""
+# Standard library imports
+import fcntl
 import json
 import os
 import tempfile
-import fcntl
 import time
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict
+
+# Local imports
 from .logger_setup import logger
-from datetime import datetime, timezone, timedelta
 
 class FileOperationError(Exception):
     """Raised when file operations fail"""

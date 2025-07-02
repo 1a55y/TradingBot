@@ -1,16 +1,21 @@
 """Base bot class to eliminate code duplication - CRITICAL FIX #5"""
-from abc import ABC, abstractmethod
-import os
+# Standard library imports
+import asyncio
 import json
+import os
+from abc import ABC, abstractmethod
 from datetime import datetime, timezone
 from typing import Dict, List, Optional, Tuple
-import pandas as pd
+
+# Third-party imports
 import numpy as np
-import asyncio
-from src.utils.logger_setup import logger
+import pandas as pd
+
+# Local imports
 from src.config import Config
 from src.utils.data_validator import DataValidator, DataValidationError
 from src.utils.file_operations import create_safe_file_operations, safe_update_monitoring
+from src.utils.logger_setup import logger
 
 class BaseGoldBot(ABC):
     """Base class for Gold Trading Bot - shared functionality"""
@@ -36,7 +41,8 @@ class BaseGoldBot(ABC):
         
         logger.info(f"{self.__class__.__name__} initialized")
         logger.info(f"Paper Trading: {self.config.PAPER_TRADING}")
-        logger.info(f"Default Position Size: {self.config.DEFAULT_POSITION_MGC} MGC")
+        logger.info(f"Trading Contract: {self.config.SYMBOL} ({self.config.TRADING_CONTRACT})")
+        logger.info(f"Position Limits: {self.config.MIN_POSITION}-{self.config.MAX_POSITION} contracts")
     
     @abstractmethod
     async def connect(self) -> bool:
@@ -209,17 +215,18 @@ class BaseGoldBot(ABC):
     
     def calculate_position_size(self, stop_distance_ticks: int) -> int:
         """Calculate position size based on risk - shared implementation"""
-        # Phase 1: Use fixed conservative size
-        size = self.config.DEFAULT_POSITION_MGC
+        # Get dynamic position size based on account balance
+        # This will be overridden in subclasses that have access to account balance
+        size = self.config.DEFAULT_POSITION
         
         # Reduce size after losses
         if self.consecutive_losses >= 1:
-            size = max(self.config.MIN_POSITION_MGC, size // 2)
+            size = max(self.config.MIN_POSITION, size // 2)
         
         # Ensure within limits
-        size = max(self.config.MIN_POSITION_MGC, min(size, self.config.MAX_POSITION_MGC))
+        size = max(self.config.MIN_POSITION, min(size, self.config.MAX_POSITION))
         
-        logger.info(f"Position size: {size} MGC")
+        logger.info(f"Position size: {size} {self.config.SYMBOL}")
         return size
     
     async def update_monitoring(self) -> None:
@@ -259,7 +266,7 @@ class BaseGoldBot(ABC):
             
             # Validate pattern is above current price (valid resistance)
             if best_signal['level'] < current_price:
-                logger.debug(f"Skipping bearish signal - level ${best_signal['level']:.2f} below current ${current_price:.2f}")
+                logger.warning(f"Skipping bearish signal - level ${best_signal['level']:.2f} below current ${current_price:.2f}")
                 return
         
         # Calculate position size
@@ -268,7 +275,13 @@ class BaseGoldBot(ABC):
         
         # Validate order parameters
         try:
-            self.validator.validate_order_params(side, position_size, stop_price, target_price, current_price)
+            self.validator.validate_order_params(
+                side=side,
+                quantity=position_size,
+                stop=stop_price,
+                target=target_price,
+                entry=current_price
+            )
         except DataValidationError as e:
             logger.error(f"Invalid order parameters: {e}")
             return

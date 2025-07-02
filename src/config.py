@@ -1,11 +1,21 @@
-"""Configuration settings for Gold Futures Trading Bot"""
+"""Configuration settings for Multi-Contract Trading Bot"""
+# Standard library imports
 import os
 from datetime import time
 from typing import Dict, List
+
+# Third-party imports
 from dotenv import load_dotenv
+
+# Local imports
+from .contracts import CONTRACTS, adjust_pattern_parameters, calculate_position_size, get_contract
 
 # Load environment variables
 load_dotenv()
+
+# Get the selected contract early to avoid initialization issues
+_TRADING_CONTRACT = os.getenv('TRADING_CONTRACT', 'MNQ')
+_selected_contract = get_contract(_TRADING_CONTRACT)
 
 class Config:
     # API Settings
@@ -17,66 +27,51 @@ class Config:
     TOPSTEP_MARKET = os.getenv('TOPSTEP_MARKET', 'CME_TOB')
     PAPER_TRADING = os.getenv('PAPER_TRADING', 'True').lower() == 'true'
     
-    # Account IDs
-    STEP1_ACCOUNT_ID = 9203477  # S1JUL114911938 - Step 1 evaluation
-    PRACTICE_ACCOUNT_ID = 9156522  # PRACTICEJUN3014889749 - Practice account
+    # Trading Contract Selection
+    TRADING_CONTRACT = _TRADING_CONTRACT
+    _contract = _selected_contract
+    
+    # Account IDs (from environment variables)
+    STEP1_ACCOUNT_ID = int(os.getenv('TOPSTEP_STEP1_ACCOUNT_ID', '9203477'))  # Step 1 evaluation
+    PRACTICE_ACCOUNT_ID = int(os.getenv('TOPSTEP_PRACTICE_ACCOUNT_ID', '9156522'))  # Practice account
     
     # API URLs
     TOPSTEP_API_BASE_URL = os.getenv('TOPSTEP_API_BASE_URL', 'https://api.topstepx.com')
     TOPSTEP_RTC_BASE_URL = os.getenv('TOPSTEP_RTC_BASE_URL', 'https://rtc.topstepx.com')
     TOPSTEP_WS_DATA_URL = os.getenv('TOPSTEP_WS_DATA_URL', 'wss://rtc.topstepx.com/hubs/market')
     TOPSTEP_WS_TRADING_URL = os.getenv('TOPSTEP_WS_TRADING_URL', 'wss://rtc.topstepx.com/hubs/user')
-    API_BASE_URL = os.getenv('TOPSTEP_API_BASE_URL', 'https://api.topstepx.com')
-    RTC_BASE_URL = os.getenv('TOPSTEP_RTC_BASE_URL', 'https://rtc.topstepx.com')
-    WS_DATA_URL = os.getenv('TOPSTEP_WS_DATA_URL', 'wss://rtc.topstepx.com/hubs/market')
-    WS_TRADING_URL = os.getenv('TOPSTEP_WS_TRADING_URL', 'wss://rtc.topstepx.com/hubs/user')
     
-    # Contract Specifications
-    SYMBOL = 'MGC'  # Micro Gold base symbol
-    FULL_SYMBOL = 'MGCQ25'  # Current active micro gold contract (display name)
-    CONTRACT_ID_MGC = 'CON.F.US.MGC.Q25'  # TopStepX contract ID for MGC
-    STANDARD_SYMBOL = 'GC'  # Standard Gold base symbol
-    STANDARD_FULL_SYMBOL = 'GCQ25'  # Current active standard gold contract
-    CONTRACT_ID_GC = 'CON.F.US.GC.Q25'  # TopStepX contract ID for GC
-    TICK_SIZE = 0.10  # $0.10 price movement
-    TICK_VALUE = 1.0  # $1 per tick (for MGC)
-    TICK_VALUE_GC = 10.0  # $10 per tick (for GC)
-    CONTRACT_MONTHS = ['G', 'J', 'M', 'Q', 'V', 'Z']  # Feb, Apr, Jun, Aug, Oct, Dec
-    
-    # Contract selection
-    USE_MICRO_GOLD = True  # Use MGC (True) or GC (False)
+    # Contract Specifications (dynamically loaded from selected contract)
+    SYMBOL = _selected_contract.symbol
+    FULL_SYMBOL = _selected_contract.full_symbol
+    CONTRACT_ID = _selected_contract.contract_id
+    TICK_SIZE = _selected_contract.tick_size
+    TICK_VALUE = _selected_contract.tick_value
+    CONTRACT_VOLATILITY = _selected_contract.volatility
+    CONTRACT_MONTHS = ['H', 'M', 'U', 'Z']  # Mar, Jun, Sep, Dec
     
     @classmethod
     def get_active_contract(cls) -> str:
         """Get the currently active contract symbol"""
-        if cls.USE_MICRO_GOLD:
-            return cls.FULL_SYMBOL
-        else:
-            return cls.STANDARD_FULL_SYMBOL
+        return cls.FULL_SYMBOL
     
     @classmethod
     def get_contract_id(cls) -> str:
         """Get the TopStepX contract ID"""
-        if cls.USE_MICRO_GOLD:
-            return cls.CONTRACT_ID_MGC
-        else:
-            return cls.CONTRACT_ID_GC
+        return cls.CONTRACT_ID
     
     @classmethod
     def get_tick_value(cls) -> float:
         """Get tick value for current contract"""
-        if cls.USE_MICRO_GOLD:
-            return cls.TICK_VALUE
-        else:
-            return cls.TICK_VALUE_GC
+        return cls.TICK_VALUE
     
-    # Position Limits
-    MAX_POSITION_MGC = 50  # Exchange limit
-    MIN_POSITION_MGC = 5   # Our minimum
-    DEFAULT_POSITION_MGC = 5  # Starting size (conservative)
+    # Position Limits (dynamically loaded from selected contract)
+    MAX_POSITION = _selected_contract.max_position
+    MIN_POSITION = _selected_contract.min_position
+    DEFAULT_POSITION = _selected_contract.default_position
     
     # Risk Parameters (TopStep Rules)
-    ACCOUNT_SIZE = 50000
+    DEFAULT_ACCOUNT_SIZE = float(os.getenv('DEFAULT_ACCOUNT_SIZE', '150000'))  # Default if API unavailable
     DAILY_LOSS_LIMIT = 800  # Hard stop
     TRAILING_DRAWDOWN = 2000  # TopStep trailing
     MAX_RISK_PER_TRADE = 500
@@ -88,20 +83,22 @@ class Config:
     SESSION_END = time(23, 0)      # 11:00 PM
     NEWS_BLACKOUT_START = time(22, 45)  # No new trades
     
-    # Pattern Detection Settings
-    MIN_PATTERN_SCORE = 7  # Only high-quality trades
-    LOOKBACK_CANDLES = 100
-    MIN_VOLUME_RATIO = 1.5  # vs 20-period average
+    # Pattern Detection Settings (dynamically adjusted for contract volatility)
+    _pattern_params = adjust_pattern_parameters(_selected_contract)
+    MIN_PATTERN_SCORE = _pattern_params['min_pattern_score']
+    LOOKBACK_CANDLES = _pattern_params['lookback_candles']
+    MIN_VOLUME_RATIO = _pattern_params['min_volume_ratio']
+    PATTERN_VIOLATION_TOLERANCE = _pattern_params['pattern_violation_tolerance']
     
     # Order Block Settings
-    MIN_OB_MOVE_TICKS = 20  # Minimum displacement
+    MIN_OB_MOVE_TICKS = _pattern_params['min_ob_move_ticks']
     MAX_OB_AGE_CANDLES = 50  # How old can OB be
     MIN_OB_TOUCHES = 1  # Before considering valid
     
-    # Stop Loss Settings
-    MIN_STOP_TICKS = 25  # Absolute minimum ($2.50)
-    MAX_STOP_TICKS = 100  # Risk limit constraint (allows up to $10.00 stop distance per contract)
-    DEFAULT_STOP_TICKS = 35  # Starting point ($3.50)
+    # Stop Loss Settings (dynamically loaded from selected contract)
+    MIN_STOP_TICKS = _selected_contract.min_stop_ticks
+    MAX_STOP_TICKS = _selected_contract.max_stop_ticks
+    DEFAULT_STOP_TICKS = _selected_contract.default_stop_ticks
     ATR_STOP_MULTIPLIER = 1.5  # For volatility adjustment
     
     # Take Profit Settings
@@ -109,10 +106,11 @@ class Config:
     TP2_RATIO = 2.0  # 1:2 (40% exit)
     RUNNER_RATIO = 2.5  # Max runner target
     
-    # Timeframes
-    PRIMARY_TIMEFRAME = '15m'  # Entry signals
-    HTF_TIMEFRAME = '1h'  # Trend filter
-    ENTRY_TIMEFRAME = '5m'  # Fine-tuning (optional)
+    # Timeframes (dynamically loaded from selected contract)
+    PRIMARY_TIMEFRAME = _selected_contract.primary_timeframe
+    HTF_TIMEFRAME = _selected_contract.htf_timeframe
+    ENTRY_TIMEFRAME = _selected_contract.entry_timeframe
+    ANALYSIS_TIMEFRAMES = ['1m', '5m', '15m', '30m', '1h']  # Extended multi-timeframe analysis
     
     # DXY Correlation
     DXY_SYMBOL = 'DX'  # Dollar Index
@@ -131,14 +129,7 @@ class Config:
     
     # Pattern Detection Enhancements
     MAX_PATTERN_AGE_CANDLES = 50  # Don't trade patterns older than this
-    PATTERN_VIOLATION_TOLERANCE = 0.002  # 0.2% tolerance for pattern violations
     
-    # Mock Trading Parameters
-    MOCK_VOLATILITY = 0.001  # 0.1% volatility for mock price generation
-    MOCK_TREND = 0.00001  # Slight upward bias in mock data
-    MOCK_PRICE_RANGE_MIN = 1900  # Minimum gold price in mock mode
-    MOCK_PRICE_RANGE_MAX = 2200  # Maximum gold price in mock mode
-    MOCK_BASE_WIN_PROBABILITY = 0.45  # 45% base win rate for mock trades
     
     # Timing Parameters
     SIGNAL_COOLDOWN_SECONDS = 300  # Wait 5 minutes after placing a trade
@@ -157,23 +148,34 @@ class Config:
     CIRCUIT_BREAKER_RECOVERY_TIMEOUT = 60  # Try again after 60 seconds
     
     @classmethod
-    def get_active_contract(cls) -> str:
-        """Get current active gold futures contract"""
-        # TODO: Implement logic to determine current front month
-        # For now, return a placeholder
-        from datetime import datetime
-        month_codes = {2: 'G', 4: 'J', 6: 'M', 8: 'Q', 10: 'V', 12: 'Z'}
-        current_month = datetime.now().month
-        
-        # Find next contract month
-        for month, code in month_codes.items():
-            if month >= current_month:
-                year = str(datetime.now().year)[-2:]
-                return f"MGC{code}{year}"
-        
-        # If no future month found, use February of next year
-        next_year = str(datetime.now().year + 1)[-2:]
-        return f"MGCG{next_year}"
+    def calculate_dynamic_position_size(cls, account_balance: float = None) -> int:
+        """Calculate position size based on contract and account balance"""
+        # Use provided balance or default
+        balance = account_balance if account_balance is not None else cls.DEFAULT_ACCOUNT_SIZE
+        return calculate_position_size(cls._contract, balance, cls.MAX_RISK_PER_TRADE)
+    
+    @classmethod
+    def get_contract_details(cls) -> Dict:
+        """Get full contract details"""
+        return {
+            'symbol': cls.SYMBOL,
+            'full_symbol': cls.FULL_SYMBOL,
+            'contract_id': cls.CONTRACT_ID,
+            'tick_size': cls.TICK_SIZE,
+            'tick_value': cls.TICK_VALUE,
+            'volatility': cls.CONTRACT_VOLATILITY,
+            'position_limits': {
+                'min': cls.MIN_POSITION,
+                'max': cls.MAX_POSITION,
+                'default': cls.DEFAULT_POSITION
+            },
+            'timeframes': {
+                'primary': cls.PRIMARY_TIMEFRAME,
+                'htf': cls.HTF_TIMEFRAME,
+                'entry': cls.ENTRY_TIMEFRAME,
+                'analysis': cls.ANALYSIS_TIMEFRAMES
+            }
+        }
     
     @classmethod
     def get_all_config_values(cls) -> Dict:

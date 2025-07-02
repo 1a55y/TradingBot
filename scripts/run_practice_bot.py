@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Run the trading bot continuously on practice account with real-time data"""
 
+# Standard library imports
 import asyncio
 import signal
 import sys
@@ -8,10 +9,10 @@ from datetime import datetime
 from pathlib import Path
 
 # Add src to Python path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
+# Local imports
 from src.bot_live import LiveGoldBot
-from src.api.topstep_websocket_client import TopStepXWebSocketClient
 from src.config import Config
 from src.utils.logger_setup import logger
 

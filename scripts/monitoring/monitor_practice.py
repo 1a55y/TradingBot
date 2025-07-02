@@ -1,17 +1,14 @@
 #!/usr/bin/env python3
 """Monitor trading bot performance on practice account"""
 
-import asyncio
 import json
 import sys
-from datetime import datetime
-from pathlib import Path
 import time
+from pathlib import Path
 
 # Add src to Python path
-sys.path.insert(0, str(Path(__file__).parent))
+sys.path.insert(0, str(Path(__file__).parent.parent.parent))
 
-from src.utils.logger_setup import logger
 
 
 def display_status():

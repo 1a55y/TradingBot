@@ -1,11 +1,16 @@
 """Mock TopStepX API Client for Testing"""
+# Standard library imports
 import asyncio
 import json
 from datetime import datetime, timezone
-from typing import Dict, Optional, List, Any
+from typing import Any, Dict, List, Optional
+
+# Third-party imports
 import numpy as np
-from src.utils.logger_setup import logger
+
+# Local imports
 from src.config import Config
+from src.utils.logger_setup import logger
 
 
 class MockTopStepXClient:
