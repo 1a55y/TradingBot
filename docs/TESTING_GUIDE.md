@@ -1,6 +1,6 @@
-# T-BOT Testing Guide
+# Blue2.0 Testing Guide
 
-This guide provides comprehensive instructions for testing the T-BOT trading system, including manual trade verification, automated testing, trade log analysis, and risk calculations.
+This guide provides comprehensive instructions for testing the Blue2.0 trading system, including manual trade verification, automated testing, trade log analysis, and risk calculations.
 
 ## Table of Contents
 1. [Manual Trade Testing](#manual-trade-testing)

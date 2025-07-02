@@ -1,9 +1,9 @@
-# T-BOT Project Status Report
+# Blue2.0 Project Status Report
 *Generated: July 2, 2025*
 
 ## 1. Executive Summary
 
-T-BOT is a sophisticated multi-contract automated trading bot designed for TopStep evaluation accounts. The system successfully implements Smart Money Concepts (SMC) strategies with real-time data streaming capabilities via WebSocket connections. The bot is currently in production-ready state with Phase 2 completed, featuring live API integration, multi-timeframe analysis, and comprehensive risk management.
+Blue2.0 is a sophisticated multi-contract automated trading bot designed for TopStep evaluation accounts. The system successfully implements Smart Money Concepts (SMC) strategies with real-time data streaming capabilities via WebSocket connections. The bot is currently in production-ready state with Phase 2 completed, featuring live API integration, multi-timeframe analysis, and comprehensive risk management.
 
 **Current Status:** ✅ **OPERATIONAL** - Production ready with paper trading mode active
 
@@ -29,6 +29,7 @@ T-BOT is a sophisticated multi-contract automated trading bot designed for TopSt
 - ✅ **July 2, 2025** - Successful live trading tests with paper account
 - ✅ **July 2, 2025** - WebSocket stability improvements and auto-reconnect
 - ✅ **July 2, 2025** - Enhanced trade logging with execution metrics
+- ✅ **July 2, 2025** - Partial profit taking system implemented
 
 ## 3. Working Systems
 
@@ -39,6 +40,7 @@ T-BOT is a sophisticated multi-contract automated trading bot designed for TopSt
 - **Multi-Timeframe Analysis**: 1m, 5m, 15m, 30m, 1h simultaneous analysis
 - **Pattern Detection**: Order blocks, support/resistance levels
 - **Risk Management**: Daily loss limits, position sizing, stop loss/take profit
+- **Partial Profit Taking**: Automatic position splitting with multiple targets
 
 ### Data Architecture
 - **Hybrid Approach**: REST API for historical candles + WebSocket for real-time execution

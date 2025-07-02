@@ -1,19 +1,47 @@
 # Changelog
 
-All notable changes to the T-BOT Multi-Contract Trading Bot project will be documented in this file.
+All notable changes to the Blue2.0 Multi-Contract Trading Bot project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+## [0.5.0] - 2025-07-02 - Blue2.0 Rebranding
+
+### Changed
+- **Complete rebranding from T-BOT to Blue2.0**
+- Updated all user-facing messages and documentation
+- Added ASCII art logo for Blue2.0 startup banner
+- Enhanced monitoring displays with Blue2.0 branding
+- Updated logger names to Blue2.0
+- Refreshed all documentation headers
+
+## [0.4.0] - 2025-07-02 - Partial Profit Taking System
+
 ### Added
-- Real-time trade execution on practice account
-- Production-ready WebSocket implementation for live data streaming
-- Multi-contract support for various futures (MNQ, NQ, MES, ES, MGC, GC)
-- Multi-timeframe analysis across 5 timeframes (1m, 5m, 15m, 30m, 1h)
-- Self-learning system for pattern performance tracking
-- Enhanced trade logging with comprehensive JSON status monitoring
+- **Partial profit taking system with automatic position splitting**
+- Configurable target percentages (default: 50%/40%/10%)
+- Multiple limit orders at different R:R ratios (1:1, 1:2, 1:2.5)
+- Automatic stop adjustment to breakeven after first target hit
+- Real-time tracking of partial fills and P&L
+- PartialProfitManager utility class for managing split positions
+- Comprehensive test suite for partial profit functionality
+- Detailed documentation for partial profit system
+
+### Changed
+- Updated base_bot.py to support partial profit mode
+- Modified bot_live.py to integrate partial profit manager
+- Enhanced position tracking to handle multiple targets
+- Improved fill handling to recognize partial target fills
+- Updated monitoring to include partial profit status
+
+### Configuration
+- Added ENABLE_PARTIAL_PROFITS toggle (default: True)
+- Added PARTIAL_PROFIT_PERCENTAGES configuration
+- Added PARTIAL_PROFIT_RATIOS configuration
+- Added ADJUST_STOP_AFTER_TP1 setting (default: True)
+- Added BREAKEVEN_BUFFER_TICKS parameter (default: 2)
 
 ## [0.3.0] - 2025-07-01 - BREAKTHROUGH: Real Trading on Practice Account
 

@@ -19,7 +19,7 @@ T-BOT is a sophisticated automated trading system designed for cryptocurrency fu
 - **Enhanced Trade Logging** - Basic logging done, analytics pending
 
 ### 📋 TODO
-- **Partial Profit Taking** - Not implemented
+- ~~**Partial Profit Taking**~~ - ✅ IMPLEMENTED
 - **Stop Loss Orders** - API integration pending
 - **Take Profit Orders** - API integration pending
 - **Pattern Detection Algorithms** - Core logic not implemented
@@ -461,6 +461,32 @@ class RiskManager:
         return self.apply_position_limits(final_size)
 ```
 
+### Partial Profit Taking ✅ IMPLEMENTED
+
+T-BOT now includes an advanced partial profit system that automatically splits positions into multiple targets:
+
+```python
+# Configuration in config.py
+ENABLE_PARTIAL_PROFITS = True
+PARTIAL_PROFIT_PERCENTAGES = {
+    1: 0.50,  # 50% at first target
+    2: 0.40,  # 40% at second target  
+    3: 0.10   # 10% runner
+}
+PARTIAL_PROFIT_RATIOS = {
+    1: 1.0,   # 1:1 R:R for first target
+    2: 2.0,   # 1:2 R:R for second target
+    3: 2.5    # 1:2.5 R:R for runner
+}
+```
+
+**Features:**
+- Automatic position splitting into 3 configurable parts
+- Individual limit orders for each target
+- Stop adjustment to breakeven after first target hit
+- Automatic cancellation of unfilled targets
+- Real-time P&L tracking for each partial fill
+
 ### Stop Loss Management
 
 ```python
@@ -475,6 +501,10 @@ def set_dynamic_stop_loss(self, entry_price, market_conditions):
     
     # Set stop loss price
     stop_price = entry_price * (1 - adjusted_stop)
+    
+    # With partial profits: adjust to breakeven after TP1
+    if self.config.ENABLE_PARTIAL_PROFITS and tp1_filled:
+        stop_price = max(stop_price, entry_price + buffer)
     
     return {
         'stop_price': stop_price,

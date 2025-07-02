@@ -299,8 +299,14 @@ class TopStepXClient:
                 "side": order_side_map.get(order_data.get("side", "Buy"), 0),
                 "size": order_data.get("quantity", 1),
                 "limitPrice": order_data.get("limitPrice"),
-                "stopPrice": order_data.get("stopPrice")
+                "stopPrice": order_data.get("stopPrice"),
+                "trailPrice": order_data.get("trailPrice"),
+                "customTag": order_data.get("customTag"),
+                "linkedOrderId": order_data.get("linkedOrderId")
             }
+            
+            # Log the order we're sending for debugging
+            logger.info(f"📤 Sending order to TopStep API: {topstep_order}")
             
             async with self.session.post(
                 f"{self.base_url}/api/Order/place",

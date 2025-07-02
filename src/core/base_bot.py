@@ -18,7 +18,7 @@ from src.utils.file_operations import create_safe_file_operations, safe_update_m
 from src.utils.logger_setup import logger
 
 class BaseGoldBot(ABC):
-    """Base class for Gold Trading Bot - shared functionality"""
+    """Base class for Blue2.0 Trading Bot - shared functionality"""
     
     def __init__(self):
         self.config = Config
@@ -43,6 +43,26 @@ class BaseGoldBot(ABC):
         logger.info(f"Paper Trading: {self.config.PAPER_TRADING}")
         logger.info(f"Trading Contract: {self.config.SYMBOL} ({self.config.TRADING_CONTRACT})")
         logger.info(f"Position Limits: {self.config.MIN_POSITION}-{self.config.MAX_POSITION} contracts")
+    
+    def _print_startup_banner(self):
+        """Print Blue2.0 startup banner"""
+        banner = """
+        ╔════════════════════════════════════════════════════════════════╗
+        ║                                                                ║
+        ║   ██████╗ ██╗     ██╗   ██╗███████╗    ██████╗       ██████╗   ║
+        ║   ██╔══██╗██║     ██║   ██║██╔════╝    ╚════██╗     ██╔═████╗  ║
+        ║   ██████╔╝██║     ██║   ██║█████╗       █████╔╝     ██║██╔██║  ║
+        ║   ██╔══██╗██║     ██║   ██║██╔══╝      ██╔═══╝      ████╔╝██║  ║  
+        ║   ██████╔╝███████╗╚██████╔╝███████╗    ███████╗ ██╗ ╚██████╔╝  ║ 
+        ║   ╚═════╝ ╚══════╝ ╚═════╝ ╚══════╝    ╚══════╝ ╚═╝  ╚═════╝   ║ 
+        ║                                                                ║ 
+        ║             Next Generation Trading Intelligence               ║ 
+        ║            Multi-Contract • Smart Money • Futures              ║
+        ║                                                                ║
+        ╚════════════════════════════════════════════════════════════════╝
+        """
+        for line in banner.strip().split('\n'):
+            logger.info(line)
     
     @abstractmethod
     async def connect(self) -> bool:
@@ -251,7 +271,12 @@ class BaseGoldBot(ABC):
         if best_signal['type'] == 'bullish':
             # For bullish: stop below entry, target above
             stop_price = current_price - (self.config.DEFAULT_STOP_TICKS * self.config.TICK_SIZE)
-            target_price = current_price + (self.config.DEFAULT_STOP_TICKS * self.config.TICK_SIZE * self.config.TP1_RATIO)
+            # If partial profits are disabled, use single target
+            if not self.config.ENABLE_PARTIAL_PROFITS:
+                target_price = current_price + (self.config.DEFAULT_STOP_TICKS * self.config.TICK_SIZE * self.config.TP1_RATIO)
+            else:
+                # With partial profits, we'll use the runner target as reference
+                target_price = current_price + (self.config.DEFAULT_STOP_TICKS * self.config.TICK_SIZE * self.config.RUNNER_RATIO)
             side = 'BUY'
             
             # Validate pattern is below current price (valid support)
@@ -261,7 +286,12 @@ class BaseGoldBot(ABC):
         else:
             # For bearish: stop above entry, target below
             stop_price = current_price + (self.config.DEFAULT_STOP_TICKS * self.config.TICK_SIZE)
-            target_price = current_price - (self.config.DEFAULT_STOP_TICKS * self.config.TICK_SIZE * self.config.TP1_RATIO)
+            # If partial profits are disabled, use single target
+            if not self.config.ENABLE_PARTIAL_PROFITS:
+                target_price = current_price - (self.config.DEFAULT_STOP_TICKS * self.config.TICK_SIZE * self.config.TP1_RATIO)
+            else:
+                # With partial profits, we'll use the runner target as reference
+                target_price = current_price - (self.config.DEFAULT_STOP_TICKS * self.config.TICK_SIZE * self.config.RUNNER_RATIO)
             side = 'SELL'
             
             # Validate pattern is above current price (valid resistance)
@@ -352,13 +382,16 @@ class BaseGoldBot(ABC):
     async def run(self):
         """Main bot execution - can be overridden but usually shared"""
         try:
+            # Display startup banner
+            self._print_startup_banner()
+            
             # Connect to data source
             connected = await self.connect()
             if not connected:
                 logger.error("Failed to connect")
                 return
             
-            logger.success("Bot started successfully!")
+            logger.success("Blue2.0 started successfully!")
             
             # Create concurrent tasks
             tasks = [
@@ -376,4 +409,4 @@ class BaseGoldBot(ABC):
             logger.error(f"Bot error: {e}")
         finally:
             await self.disconnect()
-            logger.info("Bot shutdown complete")
+            logger.info("Blue2.0 shutdown complete")

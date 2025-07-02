@@ -23,6 +23,8 @@ class MockTopStepXClient:
         self.mock_positions = []
         self.mock_orders = []
         self.current_price = 2050.0
+        self.cancelled_orders = []  # Track cancelled orders for testing
+        self.order_counter = 1000  # For generating order IDs
         
         logger.info("Mock TopStepX Client initialized")
     
@@ -62,17 +64,32 @@ class MockTopStepXClient:
     
     async def place_order(self, order_data: Dict) -> Optional[Dict]:
         """Mock order placement"""
-        order_id = f"MOCK_{datetime.now().timestamp()}"
+        # Generate unique order ID
+        self.order_counter += 1
+        order_id = f"MOCK_{self.order_counter}"
+        
+        # Determine fill price based on order type
+        order_type = order_data.get('orderType', 'Market')
+        if order_type == 'Market':
+            fill_price = self.current_price
+        elif order_type == 'Limit':
+            fill_price = order_data.get('limitPrice', self.current_price)
+        elif order_type == 'Stop':
+            fill_price = order_data.get('stopPrice', self.current_price)
+        else:
+            fill_price = self.current_price
+            
         order = {
             'order_id': order_id,
-            'status': 'filled',
-            'fill_price': self.current_price,
+            'orderId': order_id,  # Support both formats
+            'status': 'filled' if order_type == 'Market' else 'pending',
+            'fill_price': fill_price,
             **order_data
         }
         self.mock_orders.append(order)
         
-        # Create mock position
-        if order_data.get('order_type') == 'MARKET':
+        # Create mock position for market orders
+        if order_type == 'Market':
             position = {
                 'position_id': f"POS_{order_id}",
                 'symbol': order_data['symbol'],
@@ -83,11 +100,12 @@ class MockTopStepXClient:
             }
             self.mock_positions.append(position)
         
-        logger.info(f"Mock order placed: {order_id}")
+        logger.info(f"Mock {order_type} order placed: {order_id}")
         return order
     
     async def cancel_order(self, order_id: str) -> bool:
         """Mock order cancellation"""
+        self.cancelled_orders.append(order_id)
         logger.info(f"Mock order cancelled: {order_id}")
         return True
     
@@ -102,6 +120,18 @@ class MockTopStepXClient:
             'bid_size': np.random.randint(10, 100),
             'ask_size': np.random.randint(10, 100),
             'volume': np.random.randint(5000, 20000)
+        }
+    
+    async def _get_contract_by_symbol(self, symbol: str) -> Optional[Dict]:
+        """Mock contract lookup"""
+        # Return mock contract data
+        return {
+            'id': f'mock-contract-{symbol}',
+            'contractId': f'mock-contract-{symbol}',
+            'symbol': symbol,
+            'name': f'Mock {symbol} Contract',
+            'tickSize': 0.25,
+            'tickValue': 1.25
         }
     
     async def get_historical_data(

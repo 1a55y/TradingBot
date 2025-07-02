@@ -106,6 +106,21 @@ class Config:
     TP2_RATIO = 2.0  # 1:2 (40% exit)
     RUNNER_RATIO = 2.5  # Max runner target
     
+    # Partial Profit Taking Settings
+    ENABLE_PARTIAL_PROFITS = False  # Temporarily disabled for protective orders implementation
+    PARTIAL_PROFIT_PERCENTAGES = {
+        1: 0.50,  # 50% at first target
+        2: 0.40,  # 40% at second target  
+        3: 0.10   # 10% runner
+    }
+    PARTIAL_PROFIT_RATIOS = {
+        1: 1.0,   # 1:1 R:R for first target
+        2: 2.0,   # 1:2 R:R for second target
+        3: 2.5    # 1:2.5 R:R for runner
+    }
+    ADJUST_STOP_AFTER_TP1 = True  # Move stop to breakeven after TP1
+    BREAKEVEN_BUFFER_TICKS = 2    # Buffer in ticks when moving to breakeven
+    
     # Timeframes (dynamically loaded from selected contract)
     PRIMARY_TIMEFRAME = _selected_contract.primary_timeframe
     HTF_TIMEFRAME = _selected_contract.htf_timeframe

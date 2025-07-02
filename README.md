@@ -1,4 +1,4 @@
-# Multi-Contract Trading Bot 📈
+# Blue2.0 - Multi-Contract Trading Bot 📈
 
 A self-learning automated trading bot supporting multiple futures contracts on TopStep evaluation accounts with multi-timeframe analysis and comprehensive trade monitoring.
 
@@ -56,7 +56,7 @@ A self-learning automated trading bot supporting multiple futures contracts on T
 
 ## Overview
 
-This bot implements Smart Money Concepts (SMC) strategies to trade various futures contracts including indices (S&P 500, Nasdaq) and commodities (Gold). It features dynamic contract selection, real-time data streaming, multi-timeframe analysis, pattern-based trading with progressive learning capabilities, and advanced trade logging for performance monitoring.
+Blue2.0 implements Smart Money Concepts (SMC) strategies to trade various futures contracts including indices (S&P 500, Nasdaq) and commodities (Gold). It features dynamic contract selection, real-time data streaming, multi-timeframe analysis, pattern-based trading with progressive learning capabilities, and advanced trade logging for performance monitoring.
 
 ## Real-Time Data Performance
 
@@ -180,7 +180,7 @@ cat logs/trades_today.json | jq .
 ### 1. Clone the repository
 ```bash
 git clone <your-repo-url>
-cd T-BOT
+cd Blue2.0
 ```
 
 ### 2. Create virtual environment
@@ -241,7 +241,7 @@ watch -n 5 python check_status.py
 ## File Structure
 
 ```
-T-BOT/
+Blue2.0/
 ├── bot.py                      # Main bot (production)
 ├── bot_mock.py                 # Mock bot for testing
 ├── config.py                   # Configuration settings

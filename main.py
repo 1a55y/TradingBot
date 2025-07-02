@@ -1,4 +1,4 @@
-"""Main entry point for Gold Trading Bot"""
+"""Main entry point for Blue2.0 Trading Bot"""
 # Standard library imports
 import argparse
 import asyncio
@@ -17,7 +17,7 @@ from src.utils.logger_setup import logger
 def main():
     """Main entry point"""
     
-    parser = argparse.ArgumentParser(description="Gold Futures Trading Bot")
+    parser = argparse.ArgumentParser(description="Blue2.0 - Multi-Contract Futures Trading Bot")
     parser.add_argument("--mock", action="store_true", help="Run in mock mode")
     parser.add_argument("--live", action="store_true", help="Run with live API connection")
     parser.add_argument("--live-mock", action="store_true", help="Run live bot with mock API")

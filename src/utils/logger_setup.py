@@ -15,7 +15,7 @@ except ImportError:
     USING_LOGURU = False
     
     # Create logger
-    logger = logging.getLogger("GoldBot")
+    logger = logging.getLogger("Blue2.0")
     logger.setLevel(logging.DEBUG)
     
     # Create formatters

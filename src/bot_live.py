@@ -1,4 +1,4 @@
-"""Gold Futures Trading Bot - Live Mode with TopStepX API"""
+"""Blue2.0 Trading Bot - Live Mode with TopStepX API"""
 # Standard library imports
 import asyncio
 import json
@@ -16,10 +16,11 @@ from src.api.topstep_websocket_client import TopStepXWebSocketClient
 from src.core.base_bot import BaseGoldBot
 from src.utils.data_validator import DataValidationError
 from src.utils.logger_setup import logger
+from src.utils.partial_profit_manager import PartialProfitManager
 
 
 class LiveGoldBot(BaseGoldBot):
-    """Live Gold Trading Bot using TopStepX API"""
+    """Live Blue2.0 Trading Bot using TopStepX API"""
     
     def __init__(self, use_mock_api=False):
         super().__init__()
@@ -59,9 +60,16 @@ class LiveGoldBot(BaseGoldBot):
         self._account_balance = None
         self._balance_last_fetched = None
         
-        logger.info("Live Gold Bot initialized with WebSocket support")
+        # Protective orders tracking
+        self.protective_orders = {}  # Maps position_id to {'stop_order_id': xxx, 'target_order_id': xxx}
+        
+        # Initialize partial profit manager
+        self.partial_profit_manager = None  # Will be initialized after API connection
+        
+        logger.info("Blue2.0 Live Bot initialized with WebSocket support")
         logger.info(f"Trading Symbol: {self.config.SYMBOL}")
         logger.info(f"Market: {self.config.TOPSTEP_MARKET}")
+        logger.info(f"Partial Profits: {'ENABLED' if self.config.ENABLE_PARTIAL_PROFITS else 'DISABLED'}")
     
     async def connect(self) -> bool:
         """Connect to TopStepX API and WebSocket"""
@@ -72,6 +80,11 @@ class LiveGoldBot(BaseGoldBot):
                 return False
             
             self.is_running = True
+            
+            # Initialize partial profit manager after API connection
+            if self.config.ENABLE_PARTIAL_PROFITS:
+                self.partial_profit_manager = PartialProfitManager(self.api_client)
+                logger.info("Partial Profit Manager initialized")
             
             # Get contract ID based on configuration
             contract_symbol = self.config.SYMBOL  # This will be 'MNQ' or 'NQ'
@@ -192,6 +205,7 @@ class LiveGoldBot(BaseGoldBot):
         quantity = event.get('quantity')
         side = event.get('side')
         fill_timestamp = datetime.now(timezone.utc)
+        custom_tag = event.get('custom_tag', '')
         
         logger.info("=" * 60)
         logger.info("✅ ORDER FILLED")
@@ -201,6 +215,19 @@ class LiveGoldBot(BaseGoldBot):
         logger.info(f"Quantity: {quantity}")
         logger.info(f"Fill Price: ${fill_price:.2f}")
         logger.info(f"Fill Time: {fill_timestamp.isoformat()}")
+        
+        # Check if this is a partial profit target fill
+        if custom_tag.startswith('PT') and self.partial_profit_manager:
+            # Find the parent position
+            parent_position_id = event.get('linked_order_id')
+            if parent_position_id:
+                await self.partial_profit_manager.handle_partial_fill(
+                    position_id=parent_position_id,
+                    filled_order_id=order_id,
+                    fill_price=fill_price,
+                    fill_quantity=quantity
+                )
+                return
         
         # Update positions with fill details
         if order_id in self.positions:
@@ -231,6 +258,9 @@ class LiveGoldBot(BaseGoldBot):
             
             # Update trade log
             self._log_trade_execution(position)
+            
+            # Place protective orders (stop loss and take profit)
+            await self.place_protective_orders(order_id)
     
     async def _handle_reject(self, event: Dict) -> None:
         """Handle order rejection"""
@@ -280,6 +310,22 @@ class LiveGoldBot(BaseGoldBot):
             
             logger.info(f"R-Multiple: {r_multiple:.2f}R")
             logger.info(f"Duration: {(close_timestamp - position.get('entry_timestamp')).total_seconds() / 60:.1f} minutes")
+            
+            # If we have partial profit manager, show the summary
+            if self.partial_profit_manager and position_id in self.partial_profit_manager.managed_positions:
+                summary = self.partial_profit_manager.get_position_summary(position_id)
+                logger.info("-" * 60)
+                logger.info("PARTIAL PROFIT SUMMARY:")
+                logger.info(f"   Filled Targets: {summary['filled_targets']}")
+                logger.info(f"   Unfilled Targets: {summary['unfilled_targets']}")
+                logger.info(f"   Total Realized P&L: ${summary['realized_pnl']:.2f}")
+                
+                # Cancel any remaining target orders
+                await self.partial_profit_manager.cancel_remaining_targets(position_id)
+                
+                # Clean up managed position
+                self.partial_profit_manager.cleanup_closed_positions()
+            
             logger.info("=" * 60)
             
             # Update trade tracking
@@ -485,6 +531,9 @@ class LiveGoldBot(BaseGoldBot):
                 return False
             
             # Prepare order data
+            # For a market order, we'll place stop and limit orders separately after fill
+            # This approach is more reliable than trying to attach them to the market order
+            
             order_data = {
                 "symbol": self.config.SYMBOL,
                 "contractId": contract_id,
@@ -492,10 +541,11 @@ class LiveGoldBot(BaseGoldBot):
                 "quantity": quantity,
                 "orderType": "Market",  # TopStep expects capitalized
                 "time_in_force": "GTC",
-                "account_id": self.config.TOPSTEP_ACCOUNT_ID,
-                "stop_loss": stop_price,
-                "take_profit": target_price
+                "account_id": self.config.TOPSTEP_ACCOUNT_ID
             }
+            
+            # NOTE: We do NOT include stopPrice or limitPrice on the market order
+            # These will be placed as separate protective orders after the fill
             
             # Risk check
             if total_risk > self.config.MAX_RISK_PER_TRADE:
@@ -569,6 +619,20 @@ class LiveGoldBot(BaseGoldBot):
                 # Update trade counter
                 self.total_trades += 1
                 
+                # Create managed position with partial targets if enabled
+                if self.config.ENABLE_PARTIAL_PROFITS and self.partial_profit_manager:
+                    logger.info("Creating partial profit targets...")
+                    await self.partial_profit_manager.create_managed_position(
+                        order_id=order_id,
+                        side=side,
+                        quantity=position_size,
+                        entry_price=fill_price,
+                        stop_price=stop_price,
+                        contract_id=contract_id,
+                        custom_percentages=self.config.PARTIAL_PROFIT_PERCENTAGES,
+                        custom_ratios=self.config.PARTIAL_PROFIT_RATIOS
+                    )
+                
                 return True
             else:
                 logger.error(f"❌ Order submission failed on {account_mode} account - no result from API")
@@ -616,6 +680,12 @@ class LiveGoldBot(BaseGoldBot):
         """Generate daily trading summary with detailed metrics"""
         try:
             logger.info("=" * 80)
+            logger.info("                    ▓▓▓▓▓▓  ▓▓      ▓▓   ▓▓ ▓▓▓▓▓▓▓     ▓▓▓▓▓  ")
+            logger.info("                    ▓▓   ▓▓ ▓▓      ▓▓   ▓▓ ▓▓            ▓▓ ▓▓ ")
+            logger.info("                    ▓▓▓▓▓▓  ▓▓      ▓▓   ▓▓ ▓▓▓▓▓        ▓▓▓▓▓  ")
+            logger.info("                    ▓▓   ▓▓ ▓▓      ▓▓   ▓▓ ▓▓          ▓▓   ▓▓ ")
+            logger.info("                    ▓▓▓▓▓▓  ▓▓▓▓▓▓▓ ▓▓▓▓▓▓  ▓▓▓▓▓▓▓    ▓▓▓▓▓▓  ")
+            logger.info("")
             logger.info("📊 DAILY TRADING SUMMARY")
             logger.info("=" * 80)
             logger.info(f"Date: {datetime.now(timezone.utc).date()}")
@@ -688,6 +758,173 @@ class LiveGoldBot(BaseGoldBot):
             
         except Exception as e:
             logger.error(f"Error generating daily summary: {e}")
+    
+    async def place_protective_orders(self, position_id: str) -> bool:
+        """Place separate stop loss and take profit orders after market order fills"""
+        try:
+            if position_id not in self.positions:
+                logger.error(f"Position {position_id} not found")
+                return False
+                
+            position = self.positions[position_id]
+            
+            # Only place protective orders for filled positions
+            if position.get('status') != 'filled':
+                logger.warning(f"Position {position_id} not filled yet")
+                return False
+                
+            # Get the actual fill price and other details
+            fill_price = position.get('fill_price', position.get('entry_price'))
+            quantity = position['quantity']
+            side = position['side']
+            stop_price = position['stop_price']
+            target_price = position['target_price']
+            
+            logger.info("=" * 60)
+            logger.info("📋 BLUE2.0 - PLACING PROTECTIVE ORDERS")
+            logger.info("=" * 60)
+            logger.info(f"Position ID: {position_id}")
+            logger.info(f"Fill Price: ${fill_price:.2f}")
+            logger.info(f"Stop Price: ${stop_price:.2f}")
+            logger.info(f"Target Price: ${target_price:.2f}")
+            
+            # Get contract ID
+            contract_id = self.contract_id
+            if not contract_id:
+                contract = await self.api_client._get_contract_by_symbol(self.config.SYMBOL)
+                if contract:
+                    contract_id = contract.get('id')
+                else:
+                    logger.error("Cannot find contract ID for protective orders")
+                    return False
+            
+            # Determine account to use
+            if self.config.PAPER_TRADING:
+                account_id = self.config.PRACTICE_ACCOUNT_ID
+            else:
+                account_id = self.config.STEP1_ACCOUNT_ID
+            
+            # Place stop loss order
+            # For a long position: stop order to sell below entry
+            # For a short position: stop order to buy above entry
+            stop_side = 'SELL' if side.upper() == 'BUY' else 'BUY'
+            
+            stop_order_data = {
+                "symbol": self.config.SYMBOL,
+                "contractId": contract_id,
+                "side": stop_side.capitalize(),
+                "quantity": quantity,
+                "orderType": "Stop",  # Stop market order
+                "stopPrice": stop_price,
+                "time_in_force": "GTC",
+                "account_id": account_id,
+                "customTag": f"STOP_{position_id}"  # Tag to track relationship
+            }
+            
+            logger.info(f"Placing stop loss order: {stop_side} {quantity} @ ${stop_price:.2f}")
+            stop_result = await self.api_client.place_order(stop_order_data)
+            
+            if not stop_result:
+                logger.error("Failed to place stop loss order")
+                return False
+                
+            stop_order_id = stop_result.get('order_id', stop_result.get('orderId'))
+            logger.info(f"✅ Stop loss order placed: {stop_order_id}")
+            
+            # Place take profit order
+            # For a long position: limit order to sell above entry
+            # For a short position: limit order to buy below entry
+            target_side = stop_side  # Same side as stop (opposite of entry)
+            
+            target_order_data = {
+                "symbol": self.config.SYMBOL,
+                "contractId": contract_id,
+                "side": target_side.capitalize(),
+                "quantity": quantity,
+                "orderType": "Limit",  # Limit order
+                "limitPrice": target_price,
+                "time_in_force": "GTC",
+                "account_id": account_id,
+                "customTag": f"TARGET_{position_id}"  # Tag to track relationship
+            }
+            
+            logger.info(f"Placing take profit order: {target_side} {quantity} @ ${target_price:.2f}")
+            target_result = await self.api_client.place_order(target_order_data)
+            
+            if not target_result:
+                logger.error("Failed to place take profit order")
+                # Cancel the stop order since we couldn't place both
+                await self.api_client.cancel_order(stop_order_id)
+                return False
+                
+            target_order_id = target_result.get('order_id', target_result.get('orderId'))
+            logger.info(f"✅ Take profit order placed: {target_order_id}")
+            
+            # Track protective orders
+            self.protective_orders[position_id] = {
+                'stop_order_id': stop_order_id,
+                'target_order_id': target_order_id,
+                'stop_price': stop_price,
+                'target_price': target_price
+            }
+            
+            logger.info("=" * 60)
+            logger.info("✅ PROTECTIVE ORDERS PLACED SUCCESSFULLY")
+            logger.info(f"   Stop Loss: {stop_order_id} @ ${stop_price:.2f}")
+            logger.info(f"   Take Profit: {target_order_id} @ ${target_price:.2f}")
+            logger.info("=" * 60)
+            
+            return True
+            
+        except Exception as e:
+            logger.error(f"Error placing protective orders: {e}")
+            return False
+    
+    async def _handle_protective_order_fill(self, event: Dict) -> None:
+        """Handle fill of a protective order (stop or target)"""
+        try:
+            order_id = event.get('order_id')
+            
+            # Find which position this protective order belongs to
+            position_id = None
+            order_type = None
+            
+            for pos_id, protective_orders in self.protective_orders.items():
+                if order_id == protective_orders.get('stop_order_id'):
+                    position_id = pos_id
+                    order_type = 'stop'
+                    break
+                elif order_id == protective_orders.get('target_order_id'):
+                    position_id = pos_id
+                    order_type = 'target'
+                    break
+            
+            if not position_id:
+                return  # Not a protective order
+                
+            logger.info(f"Protective {order_type} order filled for position {position_id}")
+            
+            # Cancel the other protective order
+            protective_orders = self.protective_orders[position_id]
+            
+            if order_type == 'stop':
+                # Stop filled, cancel target
+                target_id = protective_orders.get('target_order_id')
+                if target_id:
+                    logger.info(f"Cancelling take profit order {target_id}")
+                    await self.api_client.cancel_order(target_id)
+            else:
+                # Target filled, cancel stop
+                stop_id = protective_orders.get('stop_order_id')
+                if stop_id:
+                    logger.info(f"Cancelling stop loss order {stop_id}")
+                    await self.api_client.cancel_order(stop_id)
+            
+            # Remove from tracking
+            del self.protective_orders[position_id]
+            
+        except Exception as e:
+            logger.error(f"Error handling protective order fill: {e}")
     
     async def flatten_all_positions(self) -> None:
         """Emergency flatten all positions"""
@@ -957,6 +1194,11 @@ class LiveGoldBot(BaseGoldBot):
                     "winners": getattr(self, 'winning_trades', 0),
                     "losers": getattr(self, 'losing_trades', 0),
                     "win_rate": (getattr(self, 'winning_trades', 0) / self.total_trades * 100) if self.total_trades > 0 else 0
+                },
+                "partial_profits": {
+                    "enabled": self.config.ENABLE_PARTIAL_PROFITS,
+                    "active_positions": len(self.partial_profit_manager.managed_positions) if self.partial_profit_manager else 0,
+                    "targets": self.config.PARTIAL_PROFIT_PERCENTAGES if self.config.ENABLE_PARTIAL_PROFITS else {}
                 },
                 "current_price": self.current_price,
                 "next_update": (datetime.now(timezone.utc) + timedelta(seconds=30)).isoformat()

@@ -21,7 +21,7 @@ def check_status():
         
         # Display status
         print("=" * 50)
-        print("🤖 GOLD TRADING BOT STATUS")
+        print("🤖 BLUE2.0 TRADING BOT STATUS")
         print("=" * 50)
         
         # Basic info

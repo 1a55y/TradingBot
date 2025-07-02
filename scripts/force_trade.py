@@ -63,8 +63,8 @@ async def force_trade(direction='LONG', use_market_price=True, entry_price=None)
             target_price = current_price - (Config.DEFAULT_STOP_TICKS * Config.TICK_SIZE * Config.TP1_RATIO)
             side = 'SELL'
         
-        # Use default position size
-        position_size = Config.DEFAULT_POSITION_MNQ
+        # Use default position size from config
+        position_size = Config.DEFAULT_POSITION
         
         # Log trade details
         logger.info(f"\n📊 FORCED TRADE DETAILS:")

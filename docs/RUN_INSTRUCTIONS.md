@@ -1,10 +1,10 @@
-# Running the Multi-Contract Trading Bot
+# Running Blue2.0 - Multi-Contract Trading Bot
 
 ## Quick Start
 
 ### 1. Activate Virtual Environment
 ```bash
-cd "/Users/jassy/Progarming Projects/Cursor/T-BOT"
+cd "/Users/jassy/Progarming Projects/Cursor/Blue2.0"
 source venv/bin/activate
 ```
 
