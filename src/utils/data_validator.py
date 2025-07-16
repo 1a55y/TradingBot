@@ -180,8 +180,8 @@ class DataValidator:
             raise DataValidationError(f"Invalid quantity: {quantity}")
         
         # Use generic MIN/MAX_POSITION from config which adapts to current contract
-        min_pos = getattr(self.config, 'MIN_POSITION', self.config.MIN_POSITION_MNQ)
-        max_pos = getattr(self.config, 'MAX_POSITION', self.config.MAX_POSITION_MNQ)
+        min_pos = getattr(self.config, 'MIN_POSITION', 2)  # Fixed: use MIN_POSITION from config
+        max_pos = getattr(self.config, 'MAX_POSITION', 50)  # Fixed: use MAX_POSITION from config
         
         if quantity < min_pos or quantity > max_pos:
             raise DataValidationError(

@@ -1,5 +1,8 @@
 # Claude Code Chat Memory 🧠
 
+## TOP RULE
+**DO NOT CREATE NEW .MD FILES UNTIL ASKED** - This is the #1 rule. No documentation files unless explicitly requested.
+
 ## Project Overview
 Building a Gold Futures (MGC) trading bot for TopStep evaluation with self-learning capabilities. Bot improves automatically without complex ML.
 

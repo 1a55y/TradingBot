@@ -117,7 +117,7 @@ class BaseGoldBot(ABC):
                 
                 # Bullish Order Block
                 if (current['close'] < current['open'] and  # Red candle
-                    current['body_size'] > current['avg_body'] * 1.5 and  # Large body
+                    current['body_size'] > current['avg_body'] * 1.2 and  # Large body (reduced from 1.5)
                     next_candle['close'] > current['high'] and  # Next breaks high
                     next_candle['close'] > next_candle['open']):  # Next is green
                     
@@ -133,7 +133,7 @@ class BaseGoldBot(ABC):
                 
                 # Bearish Order Block
                 elif (current['close'] > current['open'] and  # Green candle
-                      current['body_size'] > current['avg_body'] * 1.5 and  # Large body
+                      current['body_size'] > current['avg_body'] * 1.2 and  # Large body (reduced from 1.5)
                       next_candle['close'] < current['low'] and  # Next breaks low
                       next_candle['close'] < next_candle['open']):  # Next is red
                     
